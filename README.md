@@ -717,7 +717,7 @@ Repositorio:
 
 👉 **Sistema de Gestión POS — Frontend**
 
-[Agregar aquí la URL del repositorio Frontend]
+https://github.com/santiagozerda/SistemaPOS-Frontend
 
 La arquitectura desacoplada permite evolucionar o reemplazar el frontend sin modificar la lógica principal del backend.
 
