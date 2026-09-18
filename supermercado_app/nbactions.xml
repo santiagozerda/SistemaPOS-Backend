@@ -29,6 +29,9 @@
                 <Env.JWT_EXPIRATION>86400000</Env.JWT_EXPIRATION>
                 
                 
+                <Env.URL_NOTIFICATION>https://quantum-slackness-regulate.ngrok-free.dev/webhook/mercadopago</Env.URL_NOTIFICATION>
+                
+                
                 
             </properties>
         </action>
