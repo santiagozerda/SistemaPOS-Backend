@@ -1,8 +1,8 @@
 package com.application.supermercado_app.Pago.Controller;
 
 import com.application.supermercado_app.Pago.Service.IMercadoPagoService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;

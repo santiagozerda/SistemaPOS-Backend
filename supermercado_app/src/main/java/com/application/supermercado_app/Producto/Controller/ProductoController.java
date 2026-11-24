@@ -2,9 +2,13 @@ package com.application.supermercado_app.Producto.Controller;
 
 import com.application.supermercado_app.Producto.DTO.AjustarStockDTO;
 import com.application.supermercado_app.Producto.DTO.CrearProductoDTO;
+import com.application.supermercado_app.Producto.DTO.Excel.ConfirmarImportacionDTO;
+import com.application.supermercado_app.Producto.DTO.Excel.ResultadoImportacionDTO;
 import com.application.supermercado_app.Promocion.DTO.AsignarPromocionDTO;
 import com.application.supermercado_app.Producto.DTO.ProductoDTO;
+import com.application.supermercado_app.Producto.Service.IProductoExcelService;
 import com.application.supermercado_app.Producto.Service.IProductoService;
+import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +30,9 @@ public class ProductoController {
 
     @Autowired
     private IProductoService service;
+
+    @Autowired
+    private IProductoExcelService productoExcelService;
 
     @PreAuthorize("hasAnyRole('CAJERO', 'ADMINISTRADOR')")
     @GetMapping
@@ -83,10 +90,21 @@ public class ProductoController {
     public ResponseEntity<ProductoDTO> findByCodigo(@PathVariable String codigoBarra) {
         return ResponseEntity.ok(service.buscarCodigoBarra(codigoBarra));
     }
-    
+
     @PreAuthorize("hasAnyRole('CAJERO', 'ADMINISTRADOR')")
     @GetMapping("/codigo-corto/{prefijo}")
-    public ResponseEntity<List<ProductoDTO>> buscarPorCodigoCorto(@PathVariable String prefijo){
+    public ResponseEntity<List<ProductoDTO>> buscarPorCodigoCorto(@PathVariable String prefijo) {
         return ResponseEntity.ok(service.buscarPorCodigoCorto(prefijo));
+    }
+
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @PostMapping("/confirmar")
+    public ResponseEntity<ResultadoImportacionDTO> confirmarImportacion(
+            @Valid @RequestBody ConfirmarImportacionDTO confirmacion) {
+
+        ResultadoImportacionDTO resultado
+                = productoExcelService.confirmarImportacion(confirmacion);
+
+        return ResponseEntity.ok(resultado);
     }
 }

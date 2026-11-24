@@ -7,11 +7,14 @@ import com.application.supermercado_app.Auth.Service.IAuthService;
 import com.application.supermercado_app.Config.Security.CustomUserDetails;
 import com.application.supermercado_app.Usuario.Model.Usuario;
 import java.time.Duration;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,10 +23,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/app/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
-    @Autowired
-    private IAuthService authService;
+    private final IAuthService authService;
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDTO> login(
@@ -31,13 +34,10 @@ public class AuthController {
 
         AuthResult authResult = authService.login(login);
 
-        ResponseCookie jwtCookie = ResponseCookie.from("jwt", authResult.getToken())
-                .httpOnly(true)
-                .secure(false)
-                .path("/")
-                .maxAge(Duration.ofHours(8))
-                .sameSite("Lax")
-                .build();
+        ResponseCookie jwtCookie = createJwtCookie(
+                authResult.getToken(),
+                Duration.ofHours(8)
+        );
 
         Usuario usuario = authResult.getUsuario();
 
@@ -51,13 +51,15 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
                 .body(response);
-
     }
 
     @GetMapping("/me")
-    public ResponseEntity<LoginResponseDTO> getCurrentUser(Authentication authentication) {
+    public ResponseEntity<LoginResponseDTO> getCurrentUser(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
 
-        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        if (userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
 
         Usuario usuario = userDetails.getUsuario();
 
@@ -65,7 +67,8 @@ public class AuthController {
                 usuario.getIdUsuario(),
                 usuario.getNombre(),
                 usuario.getEmail(),
-                usuario.getRol());
+                usuario.getRol()
+        );
 
         return ResponseEntity.ok(response);
     }
@@ -73,17 +76,26 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
 
-        ResponseCookie deleteCookie = ResponseCookie.from("jwt", "")
-                .httpOnly(true)
-                .secure(false)
-                .path("/")
-                .sameSite("Lax")
-                .maxAge(0)
-                .build();
+        ResponseCookie deleteCookie = createJwtCookie(
+                "",
+                Duration.ZERO
+        );
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, deleteCookie.toString())
                 .build();
     }
 
+    private ResponseCookie createJwtCookie(
+            String token,
+            Duration maxAge) {
+
+        return ResponseCookie.from("jwt", token)
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(maxAge)
+                .sameSite("Lax")
+                .build();
+    }
 }

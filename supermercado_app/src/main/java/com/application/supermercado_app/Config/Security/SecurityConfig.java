@@ -1,4 +1,3 @@
-
 package com.application.supermercado_app.Config.Security;
 
 import java.util.List;
@@ -39,9 +38,9 @@ public class SecurityConfig {
     @Bean
     public AuthenticationProvider authenticationProvider() {
 
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        DaoAuthenticationProvider provider
+                = new DaoAuthenticationProvider(userDetailsService);
 
-        provider.setUserDetailsService(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
 
         return provider;
@@ -60,35 +59,23 @@ public class SecurityConfig {
             throws Exception {
 
         http
-
-            // Habilita la configuración CORS
-            .cors(Customizer.withDefaults())
-
-            // La API utiliza JWT
-            .csrf(csrf -> csrf.disable())
-
-            // Mantiene la aplicación completamente Stateless
-            .sessionManagement(session ->
-                    session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-            // Configuración de autorización
-            .authorizeHttpRequests(auth -> auth
-
-                    // Login y futuros endpoints públicos
-                    .requestMatchers("/app/auth/login").permitAll()
-                    
-                    .requestMatchers("/app/auth/logout").permitAll()
-
-                    // Todo lo demás requiere autenticación
-                    .anyRequest().authenticated()
-            )
-
-            // Proveedor de autenticación
-            .authenticationProvider(authenticationProvider())
-
-            // JWT antes del filtro de usuario y contraseña
-            .addFilterBefore(jwtAuthFilter,
-                    UsernamePasswordAuthenticationFilter.class);
+                .cors(Customizer.withDefaults())
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session
+                        -> session.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/app/auth/login").permitAll()
+                        .requestMatchers("/app/auth/logout").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(
+                        jwtAuthFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }
@@ -115,12 +102,11 @@ public class SecurityConfig {
 
         configuration.setAllowCredentials(true);
 
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
+        UrlBasedCorsConfigurationSource source
+                = new UrlBasedCorsConfigurationSource();
 
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
     }
-
 }

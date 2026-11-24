@@ -2,6 +2,7 @@ package com.application.supermercado_app.Producto.Repository;
 
 import com.application.supermercado_app.Producto.Model.Producto;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -38,6 +39,16 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
         WHERE p.idProductos = :id
     """)
     Optional<Producto> findByIdForUpdate(@Param("id") Long id);
-    
+
     boolean existsByCodigoCorto(String codigoCorto);
+
+    List<Producto> findByCodigoBarraIn(Collection<String> codigoBarra);
+
+    @Query("""
+    SELECT p
+    FROM Producto p
+    WHERE LOWER(TRIM(p.nombre)) IN :nombres
+    """)
+            
+    List<Producto> findByNombresNormalizados(@Param("nombres") Collection<String> nombres);
 }

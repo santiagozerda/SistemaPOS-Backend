@@ -1,5 +1,6 @@
 package com.application.supermercado_app.Producto.Service;
 
+import com.application.supermercado_app.Exception.ImportacionException;
 import com.application.supermercado_app.Exception.NotFoundException;
 import com.application.supermercado_app.Exception.ProductoException;
 import com.application.supermercado_app.Exception.PromocionException;
@@ -7,6 +8,7 @@ import com.application.supermercado_app.Producto.DTO.AjustarStockDTO;
 import com.application.supermercado_app.Producto.DTO.CrearProductoDTO;
 import com.application.supermercado_app.Promocion.DTO.AsignarPromocionDTO;
 import com.application.supermercado_app.Producto.DTO.ProductoDTO;
+import com.application.supermercado_app.Producto.DTO.ResultadoActualizacionProductoDTO;
 import com.application.supermercado_app.Producto.Mapper.ProductoMapper;
 import com.application.supermercado_app.Producto.Model.Producto;
 import com.application.supermercado_app.Producto.Repository.ProductoRepository;
@@ -15,6 +17,9 @@ import org.springframework.stereotype.Service;
 import com.application.supermercado_app.Promocion.Model.Promocion;
 import com.application.supermercado_app.Promocion.Model.TipoPromocion;
 import com.application.supermercado_app.Promocion.Repository.PromocionRepository;
+import java.math.BigDecimal;
+import java.util.Locale;
+import java.util.Objects;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -204,5 +209,209 @@ public class ProductoService implements IProductoService {
                 .stream()
                 .map(ProductoMapper::toResponseDTO)
                 .toList();
+    }
+
+    @Override
+    public ProductoDTO crearProductoDesdeImportacion(String nombre, String categoria, BigDecimal precio, Integer cantidad, String codigoBarra) {
+
+        if (precio == null || precio.signum() < 0) {
+            throw new ProductoException("El precio del producto no es válido.");
+        }
+
+        if (cantidad == null || cantidad <= 0) {
+            throw new ProductoException("El stock inicial debe ser mayor a cero.");
+        }
+
+        return crearProducto(
+                nombre,
+                categoria,
+                precio.doubleValue(),
+                cantidad,
+                codigoBarra,
+                null
+        );
+    }
+
+    @Override
+    public ResultadoActualizacionProductoDTO actualizarDesdeImportacion(Long idProducto, String nombreExcel, String codigoBarraExcel, String codigoBarraDectectado, boolean coincidenciaPorNombre, Integer unidadesIngresadas, BigDecimal precioExcel, BigDecimal precioActualDetectado, boolean actualizarPrecio) {
+
+        if (unidadesIngresadas == null || unidadesIngresadas <= 0) {
+            throw new ProductoException(
+                    "La cantidad de unidades debe ser mayor a cero."
+            );
+        }
+
+        // Bloquear el registro para evitar modificaciones simultáneas.
+        Producto producto = productoRepository.findByIdForUpdate(idProducto)
+                .orElseThrow(()
+                        -> new NotFoundException("Producto no encontrado.")
+                );
+
+        String nombreActual = normalizarNombre(producto.getNombre());
+        String nombreImportado = normalizarNombre(nombreExcel);
+
+        if (!Objects.equals(
+                producto.getCodigoBarra(),
+                codigoBarraDectectado)) {
+
+            throw new ImportacionException(
+                    "El código de barras del producto cambió desde el análisis. "
+                    + "Debe revisar nuevamente la importación."
+            );
+        }
+
+        if (coincidenciaPorNombre
+                && Objects.equals(codigoBarraDectectado, codigoBarraExcel)) {
+
+            throw new ImportacionException(
+                    "La coincidencia por nombre ya no es válida."
+            );
+        }
+
+        if (!coincidenciaPorNombre
+                && !Objects.equals(codigoBarraDectectado, codigoBarraExcel)) {
+
+            throw new ImportacionException(
+                    "La coincidencia exacta ya no es válida."
+            );
+        }
+
+        // Verificar que el producto siga siendo el mismo que se analizó.
+        if (!nombreActual.equals(nombreImportado)) {
+            throw new ImportacionException(
+                    "El nombre del producto cambió desde el análisis. "
+                    + "Debe analizar nuevamente la planilla."
+            );
+        }
+
+        boolean mismoCodigo = Objects.equals(
+                producto.getCodigoBarra(),
+                codigoBarraExcel
+        );
+
+        if (coincidenciaPorNombre && mismoCodigo) {
+            throw new ImportacionException(
+                    "El código de barras del producto cambió desde el análisis. "
+                    + "Debe analizar nuevamente la planilla."
+            );
+        }
+
+        if (!coincidenciaPorNombre && !mismoCodigo) {
+            throw new ImportacionException(
+                    "El código de barras del producto cambió desde el análisis."
+            );
+        }
+
+        // Guardar valores anteriores.
+        Integer stockAnterior = producto.getCantidad();
+
+        BigDecimal precioAnterior = producto.getPrecio() == null
+                ? null
+                : BigDecimal.valueOf(producto.getPrecio());
+
+        boolean precioModificado = false;
+
+        // Actualizar el precio solamente con autorización.
+        if (actualizarPrecio) {
+
+            if (precioExcel == null || precioExcel.signum() < 0) {
+                throw new ProductoException("El precio importado no es válido.");
+            }
+
+            if (!Objects.equals(precioAnterior, precioActualDetectado)) {
+
+                throw new ImportacionException(
+                        "El precio del producto cambió después del análisis. "
+                        + "Debe revisar nuevamente la importación."
+                );
+            }
+
+            if (precioAnterior == null && precioActualDetectado != null) {
+                throw new ImportacionException(
+                        "El precio actual del producto cambió desde el análisis."
+                );
+            }
+
+            precioModificado = precioAnterior == null
+                    || precioAnterior.compareTo(precioExcel) != 0;
+
+            if (precioModificado) {
+                producto.setPrecio(precioExcel.doubleValue());
+            }
+        }
+
+        // Incrementar el stock existente.
+        Integer stockFinal;
+
+        try {
+            stockFinal = Math.addExact(
+                    stockAnterior,
+                    unidadesIngresadas
+            );
+        } catch (ArithmeticException ex) {
+            throw new ImportacionException(
+                    "El stock final supera la cantidad máxima permitida."
+            );
+        }
+
+        producto.setCantidad(stockFinal);
+
+        BigDecimal precioFinal = producto.getPrecio() == null
+                ? null
+                : BigDecimal.valueOf(producto.getPrecio());
+
+        return new ResultadoActualizacionProductoDTO(
+                producto.getIdProductos(),
+                producto.getNombre(),
+                producto.getCodigoBarra(),
+                stockAnterior,
+                unidadesIngresadas,
+                stockFinal,
+                precioAnterior,
+                precioFinal,
+                precioModificado
+        );
+    }
+
+    private ProductoDTO crearProducto(
+            String nombre,
+            String categoria,
+            Double precio,
+            int cantidad,
+            String codigoBarra,
+            Long idPromo) {
+
+        validarCodigoBarra(codigoBarra);
+
+        String codigoCorto = extraerCodigoCorto(codigoBarra);
+
+        validarCodigoCorto(codigoCorto);
+
+        Promocion promocion = idPromo != null
+                ? obtenerPromocion(idPromo)
+                : obtenerSinPromocion();
+
+        Producto producto = Producto.builder()
+                .nombre(nombre)
+                .precio(precio)
+                .categoria(categoria)
+                .cantidad(cantidad)
+                .codigoBarra(codigoBarra)
+                .codigoCorto(codigoCorto)
+                .promo(promocion)
+                .build();
+
+        producto = productoRepository.save(producto);
+
+        return ProductoMapper.toResponseDTO(producto);
+    }
+
+    private String normalizarNombre(String nombre) {
+
+        if (nombre == null) {
+            return "";
+        }
+
+        return nombre.trim().toLowerCase(Locale.ROOT);
     }
 }
